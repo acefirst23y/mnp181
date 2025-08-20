@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>MNP 最低利用期間チェッカー（181日対応）</title>
+<meta name="description" content="契約日から各キャリアの最低利用期間を加味して最短MNP可能日を算出します。181日ルール対応。" />
+<style>
+  :root{
+    --bg:#0f1216; --card:#151a20; --ink:#e8eef6; --muted:#a8b3c2;
+    --accent:#4da3ff; --accent-2:#7bd389; --danger:#ff6b6b; --border:#232b35;
+    --radius:14px;
+    --shadow:0 10px 30px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    color:var(--ink); background:radial-gradient(1200px 600px at 10% -20%, #1a2230 0%, var(--bg) 50%) fixed var(--bg);
+    letter-spacing:.2px;
+  }
+  .wrap{max-width:980px; margin:40px auto; padding:0 16px}
+  header{display:flex; align-items:center; gap:14px; margin-bottom:18px}
+  header h1{font-size:clamp(20px,3vw,28px); margin:0}
+  header .pill{font-size:12px; color:#0b1726; background:linear-gradient(90deg, var(--accent), #9ec9ff);
+    padding:6px 10px; border-radius:99px; font-weight:700}
+  .card{
+    background:linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0)) border-box;
+    border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow);
+  }
+  .grid{display:grid; gap:16px}
+  @media (min-width:840px){ .grid{grid-template-columns:1.1fr .9fr} }
+
+  .section{padding:18px}
+  .section + .section{border-top:1px solid var(--border)}
+  .section h2{margin:0 0 10px 0; font-size:16px; color:var(--muted); font-weight:600}
+  label{display:block; font-size:13px; color:var(--muted); margin:0 0 6px 2px}
+  input[type="date"], select, input[type="number"], input[type="text"]{
+    width:100%; padding:12px 12px; border-radius:12px; border:1px solid var(--border);
+    background:#0d131a; color:var(--ink); outline:none;
+  }
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance: none; margin:0 }
+  .row{display:grid; gap:12px}
+  @media (min-width:560px){ .row{grid-template-columns:1fr 1fr} }
+
+  .radio{
+    display:flex; gap:10px; flex-wrap:wrap;
+  }
+  .radio label{
+    display:inline-flex; align-items:center; gap:8px; padding:10px 12px; border:1px solid var(--border);
+    border-radius:12px; background:#0d131a; cursor:pointer; user-select:none;
+  }
+  .radio input{accent-color:var(--accent)}
+  .out{display:grid; gap:12px}
+  .result{
+    padding:14px; border-radius:12px; border:1px dashed var(--border); background:#0b131a;
+  }
+  .result strong{font-size:20px}
+  .muted{color:var(--muted); font-size:12px}
+  .bad{color:var(--danger)}
+  .good{color:var(--accent-2)}
+  .btns{display:flex; gap:10px; flex-wrap:wrap}
+  button{
+    cursor:pointer; padding:12px 14px; border-radius:12px; border:1px solid var(--border);
+    background:linear-gradient(180deg, #122033, #0b1624); color:var(--ink); font-weight:600;
+  }
+  button.primary{background:linear-gradient(180deg, #2b75ff, #1a4fcc); border-color:#1f49a8}
+  .foot{font-size:12px; color:var(--muted); margin-top:12px}
+  a{color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="pill">v2 / 181日対応</div>
+    <h1>MNP 最低利用期間チェッカー</h1>
+  </header>
+
+  <div class="card grid" id="app">
+    <div class="section">
+      <h2>入力</h2>
+      <div class="row">
+        <div>
+          <label for="contract">契約日</label>
+          <input id="contract" type="date" />
+        </div>
+        <div>
+          <label for="carrier">キャリア</label>
+          <select id="carrier">
+            <option value="ymobile">Y!mobile</option>
+            <option value="uq">UQ mobile</option>
+            <option value="linemo">LINEMO</option>
+            <option value="softbank">SoftBank</option>
+            <option value="au">au</option>
+            <option value="docomo">docomo</option>
+            <option value="rakuten">楽天モバイル</option>
+            <option value="povo">povo</option>
+            <option value="other">その他 / カスタム</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <div>
+          <label for="days">最低利用期間（日） <span class="muted">(キャリア毎に自動入力 / 変更可)</span></label>
+          <input id="days" type="number" min="1" value="181" />
+        </div>
+        <div>
+          <label for="note">メモ（任意）</label>
+          <input id="note" type="text" placeholder="案件名やプラン名など" />
+        </div>
+      </div>
+
+      <div style="margin-top:12px">
+        <div class="radio" id="counting">
+          <label><input type="radio" name="count" value="nextday" checked> 契約日の翌日を1日目（一般的）</label>
+          <label><input type="radio" name="count" value="sameday"> 契約日を1日目</label>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>結果</h2>
+      <div class="out">
+        <div class="result" id="r1">
+          <div class="muted">（翌日を1日目）最短MNP可能日</div>
+          <strong id="d1">—</strong>
+          <div class="muted" id="d1sub">—</div>
+        </div>
+        <div class="result" id="r2">
+          <div class="muted">（契約日を1日目）最短MNP可能日</div>
+          <strong id="d2">—</strong>
+          <div class="muted" id="d2sub">—</div>
+        </div>
+        <div class="btns">
+          <button class="primary" id="shareBtn">共有リンクを作成</button>
+          <button id="todayBtn">契約日を今日にする</button>
+          <button id="resetBtn">入力をリセット</button>
+        </div>
+        <div class="foot">
+          ※本ツールは日数計算の参考です。実際の「最低利用期間」や各社の解除条件はプラン・キャンペーンで異なる場合があります。必ず最新の契約条件をご確認ください（日本はDSTなし／ローカルタイムで計算）。
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>キャリア別デフォルト日数</h2>
+      <div class="foot">
+        下の設定は「キャリア選択時に自動入力される日数」です。必要に応じて調整してください。<br>
+      </div>
+      <div class="row" id="defaults"></div>
+    </div>
+  </div>
+
+  <div class="foot">© 2025 MNP工具（あなたのGitHub Pages用）</div>
+</div>
+
+<script>
+  // --- Utilities ---
+  const $ = sel => document.querySelector(sel);
+  const $$ = sel => Array.from(document.querySelectorAll(sel));
+
+  const WEEKDAYS = ["日","月","火","水","木","金","土"];
+
+  function toDateYMD(str){
+    // "yyyy-mm-dd" -> Date (local midnight)
+    if(!str) return null;
+    const [y,m,d] = str.split("-").map(n=>parseInt(n,10));
+    if(!y||!m||!d) return null;
+    return new Date(y, m-1, d);
+  }
+
+  function fmt(d){
+    if(!(d instanceof Date) || isNaN(d)) return "—";
+    const y = d.getFullYear();
+    const m = String(d.getMonth()+1).padStart(2,"0");
+    const day = String(d.getDate()).padStart(2,"0");
+    const wd = WEEKDAYS[d.getDay()];
+    return `${y}/${m}/${day}（${wd}）`;
+  }
+
+  function fmtISO(d){
+    if(!(d instanceof Date) || isNaN(d)) return "—";
+    const y = d.getFullYear();
+    const m = String(d.getMonth()+1).padStart(2,"0");
+    const day = String(d.getDate()).padStart(2,"0");
+    return `${y}-${m}-${day}`;
+  }
+
+  function addDaysLocal(d, days){
+    // Using Y/M/D constructor to avoid DST issues (JP has no DST but this is robust)
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate() + days);
+  }
+
+  function diffDays(a,b){
+    // full-day diff (b - a)
+    const A = new Date(a.getFullYear(), a.getMonth(), a.getDate());
+    const B = new Date(b.getFullYear(), b.getMonth(), b.getDate());
+    return Math.round((B - A) / 86400000);
+  }
+
+  // --- Carrier defaults (edit here) ---
+  const DEFAULTS = {
+    ymobile: 181,     // ご要望に合わせて 181日に設定
+    uq: 181,
+    linemo: 181,
+    softbank: 181,
+    au: 181,
+    docomo: 181,
+    rakuten: 181,
+    povo: 181,
+    other: 181
+  };
+
+  // --- Render defaults editor ---
+  function renderDefaults(){
+    const wrap = $("#defaults");
+    wrap.innerHTML = "";
+    Object.entries(DEFAULTS).forEach(([key, val])=>{
+      const label = {
+        ymobile:"Y!mobile", uq:"UQ mobile", linemo:"LINEMO", softbank:"SoftBank",
+        au:"au", docomo:"docomo", rakuten:"楽天モバイル", povo:"povo", other:"その他"
+      }[key] || key;
+
+      const id = `def_${key}`;
+      const box = document.createElement("div");
+      box.innerHTML = `
+        <label for="${id}">${label}（日）</label>
+        <input id="${id}" type="number" min="1" value="${val}">
+      `;
+      wrap.appendChild(box);
+      box.querySelector("input").addEventListener("input", e=>{
+        const v = parseInt(e.target.value,10);
+        if(v>0) DEFAULTS[key] = v;
+        if($("#carrier").value === key){
+          $("#days").value = DEFAULTS[key];
+          compute();
+        }
+      });
+      box.classList.add("carrier-default");
+    });
+  }
+
+  // --- Core compute ---
+  function compute(){
+    const contractStr = $("#contract").value;
+    const carrier = $("#carrier").value;
+    const days = parseInt($("#days").value || "0", 10);
+    const contract = toDateYMD(contractStr);
+
+    // Auto-fill days when carrier changes (only if user hasn't manually changed from default on focus)
+    if (!Number.isFinite(days) || days<=0){
+      $("#d1").textContent = "—";
+      $("#d2").textContent = "—";
+      $("#d1sub").textContent = "契約日と日数を入力してください。";
+      $("#d2sub").textContent = "";
+      return;
+    }
+    if (!(contract instanceof Date) || isNaN(contract)){
+      $("#d1").textContent = "—";
+      $("#d2").textContent = "—";
+      $("#d1sub").textContent = "契約日を入力してください。";
+      $("#d2sub").textContent = "";
+      return;
+    }
+
+    // Mode A: 翌日を1日目 => 契約日 + 日数
+    const a = addDaysLocal(contract, days);
+
+    // Mode B: 契約日を1日目 => 契約日 + (日数 - 1)
+    const b = addDaysLocal(contract, Math.max(0, days-1));
+
+    // Live today state
+    const today = new Date();
+    const aLeft = diffDays(today, a);
+    const bLeft = diffDays(today, b);
+
+    $("#d1").textContent = fmt(a);
+    $("#d2").textContent = fmt(b);
+
+    $("#d1sub").innerHTML = `ISO: ${fmtISO(a)}　/　今日から<span class="${aLeft<0?'bad':''}">${aLeft}</span>日`;
+    $("#d2sub").innerHTML = `ISO: ${fmtISO(b)}　/　今日から<span class="${bLeft<0?'bad':''}">${bLeft}</span>日`;
+  }
+
+  // --- Share link (encode state to query) ---
+  function makeShareURL(){
+    const params = new URLSearchParams();
+    params.set("d", $("#contract").value || "");
+    params.set("c", $("#carrier").value);
+    params.set("n", $("#note").value || "");
+    params.set("days", $("#days").value || "");
+    // Include defaults too
+    Object.entries(DEFAULTS).forEach(([k,v])=> params.set(`def_${k}`, String(v)));
+    return `${location.origin}${location.pathname}?${params.toString()}`;
+  }
+
+  function restoreFromQuery(){
+    const q = new URLSearchParams(location.search);
+    const set = (id,key=id) => { if(q.get(key)) $(id).value = q.get(key) };
+    set("#contract","d");
+    set("#note","n");
+    if(q.get("c")) $("#carrier").value = q.get("c");
+    if(q.get("days")) $("#days").value = q.get("days");
+    // defaults
+    Object.keys(DEFAULTS).forEach(k=>{
+      const v = parseInt(q.get(`def_${k}`) || "", 10);
+      if(Number.isFinite(v) && v>0) DEFAULTS[k]=v;
+    });
+  }
+
+  // --- Wiring ---
+  renderDefaults();
+  restoreFromQuery();
+
+  // Auto set days when carrier changes
+  $("#carrier").addEventListener("change", e=>{
+    const key = e.target.value;
+    $("#days").value = DEFAULTS[key] ?? 181;
+    compute();
+  });
+
+  ["#contract","#days","#note"].forEach(sel=>{
+    $(sel).addEventListener("input", compute);
+  });
+
+  // counting radio just for visual awareness, results always show両方
+  $$("#counting input").forEach(r => r.addEventListener("change", compute));
+
+  $("#todayBtn").addEventListener("click", ()=>{
+    const t = new Date();
+    const y = t.getFullYear();
+    const m = String(t.getMonth()+1).padStart(2,"0");
+    const d = String(t.getDate()).padStart(2,"0");
+    $("#contract").value = `${y}-${m}-${d}`;
+    compute();
+  });
+
+  $("#resetBtn").addEventListener("click", ()=>{
+    $("#contract").value = "";
+    $("#carrier").value = "ymobile";
+    $("#days").value = DEFAULTS["ymobile"];
+    $("#note").value = "";
+    compute();
+  });
+
+  $("#shareBtn").addEventListener("click", async ()=>{
+    const url = makeShareURL();
+    try{
+      await navigator.clipboard.writeText(url);
+      alert("共有リンクをクリップボードにコピーしました！\n" + url);
+    }catch(e){
+      prompt("共有リンク（手動でコピーしてください）", url);
+    }
+  });
+
+  // If carrier not chosen yet, set default days
+  if(!$("#days").value) $("#days").value = DEFAULTS[$("#carrier").value];
+  // If no contract date, prefill today for便利
+  if(!$("#contract").value){
+    const t = new Date();
+    const y = t.getFullYear();
+    const m = String(t.getMonth()+1).padStart(2,"0");
+    const d = String(t.getDate()).padStart(2,"0");
+    $("#contract").value = `${y}-${m}-${d}`;
+  }
+  compute();
+</script>
+</body>
+</html>
